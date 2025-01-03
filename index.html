@@ -231,6 +231,12 @@
 						document.getElementById('response-options').style.display = 'none';
 						showFinalScreen();
 					}
+					
+					if (currentPhase === 'practice') {
+						// Skip to emotion screen
+						currentPhase = 'emotion';
+						startEmotionSection();
+					}
 				}
 				
 				// Existing Enter key handler for admin screen
