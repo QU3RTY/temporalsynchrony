@@ -482,9 +482,18 @@
 			const audioElement = document.getElementById('emotion-audio');
 			
 			try {
-				// Update paths to include the correct directory
-				const videoURL = `./stimuli/videos/${videoFiles[currentFileIndex - 1].name}`;
-				const audioURL = `./stimuli/audio/${audioFiles[currentFileIndex - 1].name}`;
+				// Get the current file names from the arrays
+				const videoFileName = videoFiles[currentFileIndex - 1]?.name;
+				const audioFileName = audioFiles[currentFileIndex - 1]?.name;
+				
+				if (!videoFileName || !audioFileName) {
+					throw new Error('File names not found in media arrays');
+				}
+				
+				// Update paths to use root directory
+				const videoURL = `./${videoFileName}`;
+				const audioURL = `./${audioFileName}`;
+				
 				
 				// Set up video and audio elements
 				videoElement.src = videoURL;
@@ -503,12 +512,12 @@
 				// Create promises for loading both video and audio
 				const videoLoadPromise = new Promise((resolve, reject) => {
 					videoElement.onloadeddata = resolve;
-					videoElement.onerror = reject;
+					videoElement.onerror = (e) => reject(new Error(`Video load error: ${videoURL}`));
 				});
 				
 				const audioLoadPromise = new Promise((resolve, reject) => {
 					audioElement.onloadeddata = resolve;
-					audioElement.onerror = reject;
+					audioElement.onerror = (e) => reject(new Error(`Audio load error: ${audioURL}`));
 				});
 				
 				// Wait for both to load before playing
