@@ -173,7 +173,7 @@
 					<input type="number" id="participantId" placeholder="Participant ID Number">
 					<input type="number" id="participantAge" placeholder="Age">
 					<div id="upload-status">Loading media files...</div>
-					<button onclick="validateAndStart()" id="start-button" disabled>Continue</button>
+					<button id="start-button" onclick="validateAndStart()" disabled>Continue</button>
 				</div>
 				<div id="experiment-container" class="container">
 					<div id="practice-label" class="practice-label">Practice</div>
@@ -226,6 +226,11 @@
 		function updateUploadStatus() {
 			const statusDiv = document.getElementById('upload-status');
 			const startButton = document.getElementById('start-button');
+
+			if (!statusDiv || !startButton) {
+				console.warn("Upload status or start button not found in the DOM.");
+				return;
+			}
 
 			if (videoFiles.length === 194 && audioFiles.length === 194) {
 				statusDiv.innerHTML = `
@@ -611,7 +616,9 @@
         }
 
         // Start the experiment
-        window.onload = init;
+        document.addEventListener('DOMContentLoaded', () => {
+			init();
+		});
     </script>
 </body>
 </html>
