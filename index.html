@@ -208,49 +208,24 @@
 			});
 		}
 
-        async function loadFilesFromDropbox() {
-			const accessToken = "sl.u.AFfj1u0iU26TLbZR5n0fMQFE4n18iygXc2UpTI86q4dfUOHQd_ggmrqmenw-Dp9Tsi6UNjLcSeLjeqo36ew-E9LbdH-nW5i6ljCOvRR3pweMQXXjqrITVrYhmwbccJSbT8tmTAqKPuvQiL33uV9eLZlKtf7sw9z27RR_u5goFOqpqfl3d1LAz9HajYFLKK1a9vRbsSv4yX17E0GWlP-pOL7ukay7tZSbmdY4hqihVerre8INSaXdcHXda0wNQQzLAE8E-uhI4a7vFT_unND_Ykbm5b-pwPO8eX-eWE1ndUllsfv-aIbX1GKSxSvfEEAVPAx5TWTz9C5fuYukZR8Y5SUGBPuqDwN3elbLYKcEvMHJE9OMFe5sKHEYWGm6pd8VeS8e41CkzkctqVzUKeWdbkex96PpBGUYgUKjbbJi51baR402b6xIEU_81J9_8evq1Go8j-r3YCLbbBm37PPRyc-94hr9HYBehHgUuhnZ_Mi8QwQyt9L3q8IPqAT2V5ZrwOwjYRyi_WX11fvdYbuv7TVaAwhm8JZO0Wc0uuQXt0QI_i6JZaF2KYQsgD0Xp_bM1V_h4Un4y2uCy5ffeJZvAvOj_QQc7CsULssOXuUsc1lt0IAVUNQS6a0VUrIaOAdCfiWlrFWEIvSdLnombRoum02T-m1LhU3Uu1O0KrMASe9eyJamFyXCr0_Btaz0A5zzmI7Z80QHVUV8ozZFEbo3GnAVY_fp1hXGdVs6_wwAXRH38PAsA3nrzD829y0tTOt95vXYX7Dbw_vSEPTCUS0LDvXvWK2ZpQCB_Ar0OntNvl0kKerkX68q9UOrIpOqgaTPQ7RU3ygEZA8JIDIku6M-DnNZQ2ZTP-RAig7ongW__ncrrdGtT1OjSCLK3sHnAxzDJI9LcDIVO4J5VX1D2SS-55nt6MrAnyCCi5jqp_o5fM8vdwpBfkTAQXcb0l8sj0IFhzkj4IB3achSkFVCEH5A0plJvIXwzicf_A3khoWqkzBMvXFf_YvbHXDevlfeXK1MkfLWxScoEUNssj5HC8c8FuQddgJPYeOd03uejheQl31YpvG4gWeoHRGUE_H3IT5YzL5iVpjEuleGGWfhF7G22Gopi055LMe108wKNgufOvk6dEjm-euVXYpVFRkCWjCTtINRaPTFGUhazV23UFAaeNrsfeX414VLYfIGmDU1HoAZiW5ST_mi5d97FuBWkniRYBmD9f-rVLzc5Iuit7Jq1fEt5N3MPiSItube-jTnqQipdnsVrbWj_YzSWxqvKzJj9vuO6VwLvqd2PPNob0FfWfKqlvc7gYS766eP66XLoWL-uBSdIxAXojsXrICnPJNeHH_bCbQGAJVgoal61Be8w0CqtPgeIVNitlq1zvk6XkwQOQOlfkzuHUolOBXFy03hNGClIfwaujv88rL6zsKKiF0g8CZQdqrtrzNAqs71pFaKxg"; // Replace with your generated access token
-			const folderPath = "/ExperimentTest1"; // Replace with the path to your folder in Dropbox
-			const dropboxListUrl = "https://api.dropboxapi.com/2/files/list_folder";
-			const dropboxDownloadBaseUrl = "https://content.dropboxapi.com/2/files/download";
-
+        async function loadFilesFromGitHub() {
+			const repoURL = "https://raw.githubusercontent.com/QU3RTY/temporalsynchrony/main/";
 			const videoFiles = [];
 			const audioFiles = [];
+			
+			// Define expected filenames (replace these arrays with actual file names if known)
+			for (let i = 1; i <= 194; i++) {
+				videoFiles.push(`${repoURL}${i}.mp4`);
+				audioFiles.push(`${repoURL}${i}.wav`);
+			}
+			
+			// Simulate loading files
+			document.getElementById("file-status").innerText = `Videos loaded: ${videoFiles.length}, Audio files loaded: ${audioFiles.length}`;
 
-			try {
-				// Step 1: List all files in the folder
-				const listResponse = await fetch(dropboxListUrl, {
-					method: "POST",
-					headers: {
-						"Authorization": `Bearer ${accessToken}`,
-						"Content-Type": "application/json",
-					},
-					body: JSON.stringify({
-						path: folderPath,
-					}),
-				});
-
-				const listData = await listResponse.json();
-
-				// Step 2: Separate video and audio files
-				listData.entries.forEach((file) => {
-					if (file.name.endsWith(".mp4")) {
-						videoFiles.push(`${dropboxDownloadBaseUrl}?path=${encodeURIComponent(file.path_lower)}`);
-					} else if (file.name.endsWith(".wav")) {
-						audioFiles.push(`${dropboxDownloadBaseUrl}?path=${encodeURIComponent(file.path_lower)}`);
-					}
-				});
-
-				document.getElementById("file-status").innerText = `Videos loaded: ${videoFiles.length}, Audio files loaded: ${audioFiles.length}`;
-
-				if (videoFiles.length === 194 && audioFiles.length === 194) {
-					document.getElementById("start-button").disabled = false;
-				} else {
-					document.getElementById("file-status").innerText += "\nPlease ensure exactly 194 video and audio files are available.";
-				}
-			} catch (error) {
-				console.error("Error loading files from Dropbox:", error);
-				document.getElementById("file-status").innerText = "Error loading files. Please check your Dropbox setup.";
+			if (videoFiles.length === 194 && audioFiles.length === 194) {
+				document.getElementById("start-button").disabled = false;
+			} else {
+				document.getElementById("file-status").innerText += "\nPlease ensure exactly 194 video and audio files are available.";
 			}
 		}
 
@@ -640,7 +615,7 @@
         // Start the experiment
         window.onload = async function () {
 			init();
-			await loadFilesFromDropbox();
+			await loadFilesFromGitHub();
 		};
     </script>
 </body>
