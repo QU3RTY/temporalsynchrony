@@ -142,13 +142,12 @@
 				videoFiles = data.videos;
 				audioFiles = data.audios;
 
-				updateUploadStatus(); // Optional: Update UI to show file counts
+				updateUploadStatus(); // Update the status after loading files
 			} catch (error) {
 				console.error('Failed to load media files:', error);
 				alert('Error: Unable to load media files.');
 			}
 		}
-
 
         // Variables for emotion trials
         let emotionTrialOrder = [];
@@ -228,56 +227,41 @@
 			const statusDiv = document.getElementById('upload-status');
 			const startButton = document.getElementById('start-button');
 
-			if (videoFiles.length > 0 && audioFiles.length > 0) {
+			if (videoFiles.length === 194 && audioFiles.length === 194) {
 				statusDiv.innerHTML = `
 					Videos loaded: ${videoFiles.length}<br>
 					Audio files loaded: ${audioFiles.length}
 				`;
 				startButton.disabled = false;
 			} else {
-				statusDiv.innerHTML = 'Media files are not yet loaded.';
-				startButton.disabled = true;
-			}
-		}
-
-        function updateUploadStatus() {
-			const statusDiv = document.getElementById('upload-status');
-			const startButton = document.getElementById('start-button');
-			const fileUploadSection = document.querySelector('.file-upload-section');
-			
-			if (videoFiles.length === 194 && audioFiles.length === 194) {
-				statusDiv.style.display = 'none';
-				fileUploadSection.style.display = 'none';
-				startButton.disabled = false;
-			} else {
 				statusDiv.innerHTML = `
 					Videos loaded: ${videoFiles.length}<br>
 					Audio files loaded: ${audioFiles.length}<br>
-					<span style="color: red;">Please upload exactly 194 video files and 194 audio files.</span>
+					<span style="color: red;">Please ensure the server has exactly 194 video and audio files.</span>
 				`;
 				startButton.disabled = true;
 			}
 		}
 
         function validateAndStart() {
-            participantId = document.getElementById('participantId').value;
-            participantAge = document.getElementById('participantAge').value;
-            
-            if (!participantId || !participantAge) {
-                alert('Please enter both Participant ID and Age');
-                return;
-            }
-            
-            if (videoFiles.length !== 194 || audioFiles.length !== 194) {
+			participantId = document.getElementById('participantId').value;
+			participantAge = document.getElementById('participantAge').value;
+
+			if (!participantId || !participantAge) {
+				alert('Please enter both Participant ID and Age.');
+				return;
+			}
+
+			if (videoFiles.length !== 194 || audioFiles.length !== 194) {
 				alert('Error: The media files do not meet the required count of 194 each.');
 				return;
 			}
-            
-            document.getElementById('participant-info').style.display = 'none';
-            document.getElementById('experiment-container').style.display = 'block';
-            
-            startTBWPractice();
-        }
+
+			document.getElementById('participant-info').style.display = 'none';
+			document.getElementById('experiment-container').style.display = 'block';
+
+			startTBWPractice();
+		}
 		
 		function startTBWPractice() {
 			currentPhase = 'practice';
