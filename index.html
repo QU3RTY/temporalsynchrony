@@ -1,0 +1,647 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Audio-Visual Binding and Emotional Identification Study</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            background: #000000;
+            color: white;
+        }
+        
+        .container {
+            max-width: 800px;
+            width: 100%;
+            text-align: center;
+        }
+        
+        .stimulus {
+            width: 200px;
+            height: 200px;
+            background: white;
+            margin: 20px auto;
+            display: none;
+        }
+        
+        button {
+            padding: 10px 20px;
+            margin: 10px;
+            font-size: 16px;
+            cursor: pointer;
+        }
+        
+        input {
+            padding: 8px;
+            margin: 10px;
+            font-size: 16px;
+        }
+        
+        .practice-label {
+            color: yellow;
+            position: fixed;
+            top: 20px;
+            left: 20px;
+            font-size: 36px;
+            font-weight: bold;
+            display: none;
+        }
+        
+        .response-options {
+            display: none;
+        }
+        
+        .emotion-buttons {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 10px;
+            margin: 20px;
+        }
+
+        #participant-info {
+            display: block;
+        }
+
+        #experiment-container {
+            display: none;
+        }
+
+        #admin-screen {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.9);
+            z-index: 1000;
+            padding: 20px;
+        }
+
+        .file-upload-section {
+            margin: 20px 0;
+            padding: 20px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+        }
+
+        #upload-status {
+            margin: 10px 0;
+            font-size: 14px;
+        }
+
+        #emotion-video {
+			width: 800px; /* Double the default size */
+			margin: 0 auto;
+			display: block;
+		}
+    </style>
+</head>
+<body>
+    <script>
+        // Adjustable variables
+        const BaseAVDelay = 0;
+        const ParticipantFoldersLocation = './participants/';
+        const OutputLocation = './output/';
+		
+		//Adjustable Volume
+		const WhiteNoiseVolume = 12; // Volume in dB for white noise
+		const EmotionAudioVolume = 1.0; // Volume multiplier for emotion audio files
+
+        // New adjustable variables for emotion section asynchrony
+        const minimumAsynchrony = -400; // Minimum delay in ms
+        const maximumAsynchrony = 400;  // Maximum delay in ms
+        const asynchronySteps = 4;     // Step size in ms
+
+        // Experiment configuration
+        const tbwAsynchronies = [-300, -200, -175, -150, -125, -100, -75, -50, -25, 0, 25, 50, 75, 100, 125, 150, 175, 200, 300, 350, 400];
+        const emotions = {
+            'A': 'Anger',
+            'D': 'Disgust',
+            'F': 'Fear',
+            'H': 'Happiness',
+            'N': 'Neutral',
+            'S': 'Sadness'
+        };
+
+        // Variables for file handling
+        let videoFiles = [];
+        let audioFiles = [];
+
+        // Variables for emotion trials
+        let emotionTrialOrder = [];
+        let emotionTrialDelays = [];
+        
+        // Other variables
+        let participantId = '';
+        let participantAge = '';
+        let currentPhase = 'identification';
+        let practiceSuccessCount = 0;
+        let tbwTrials = [];
+        let tbwResults = [];
+        let emotionResults = [];
+        let currentTrialNumber = 0;
+        let trialStartTime = 0;
+
+        function init() {
+            document.body.innerHTML = `
+                <div id="participant-info" class="container">
+                    <h1>Participant Information</h1>
+                    <div>
+                        <input type="number" id="participantId" placeholder="Participant ID Number">
+                        <input type="number" id="participantAge" placeholder="Age">
+                        <p>Loading video and audio files from the server...</p>
+						<div id="file-status" style="color: yellow;"></div>
+                        <button onclick="validateAndStart()" id="start-button" disabled>Continue</button>
+                    </div>
+                </div>
+                <div id="experiment-container" class="container">
+                    <div id="practice-label" class="practice-label">Practice</div>
+                    <div id="stimulus" class="stimulus"></div>
+                    <div id="instructions" class="container"></div>
+                    <div id="response-options" class="response-options"></div>
+                    <video id="emotion-video" style="display: none;"></video>
+                    <audio id="emotion-audio" style="display: none;"></audio>
+                </div>
+                <div id="admin-screen" class="container">
+                    <h2>Administrator Download Screen</h2>
+                    <button onclick="downloadAllResults()">Download Results</button>
+                    <button onclick="closeAdminScreen()">Close</button>
+                </div>
+            `;
+
+            document.addEventListener('keydown', function(event) {
+                if (event.key === 'Enter' && currentPhase === 'complete') {
+                    document.getElementById('admin-screen').style.display = 'block';
+                }
+            });
+			addKeyboardListeners();
+        }
+		
+		// 4. Add the keyboard shortcut handler after the init function
+		function addKeyboardListeners() {
+			let keysPressed = new Set();
+			
+			document.addEventListener('keydown', function(event) {
+				keysPressed.add(event.key.toLowerCase());
+				
+				// Check for admin shortcut (A + B + C + D)
+				if (event.key == 'Tab') {
+					if (currentPhase === 'practice' || currentPhase === 'tbw') {
+						startEmotionSection();
+					}
+				}
+				
+				// Existing Enter key handler for admin screen
+				if (event.key === 'Enter' && currentPhase === 'complete') {
+					document.getElementById('admin-screen').style.display = 'block';
+				}
+			});
+			
+			document.addEventListener('keyup', function(event) {
+				keysPressed.delete(event.key.toLowerCase());
+			});
+		}
+
+        async function loadFilesFromDropbox() {
+			const accessToken = "sl.u.AFfj1u0iU26TLbZR5n0fMQFE4n18iygXc2UpTI86q4dfUOHQd_ggmrqmenw-Dp9Tsi6UNjLcSeLjeqo36ew-E9LbdH-nW5i6ljCOvRR3pweMQXXjqrITVrYhmwbccJSbT8tmTAqKPuvQiL33uV9eLZlKtf7sw9z27RR_u5goFOqpqfl3d1LAz9HajYFLKK1a9vRbsSv4yX17E0GWlP-pOL7ukay7tZSbmdY4hqihVerre8INSaXdcHXda0wNQQzLAE8E-uhI4a7vFT_unND_Ykbm5b-pwPO8eX-eWE1ndUllsfv-aIbX1GKSxSvfEEAVPAx5TWTz9C5fuYukZR8Y5SUGBPuqDwN3elbLYKcEvMHJE9OMFe5sKHEYWGm6pd8VeS8e41CkzkctqVzUKeWdbkex96PpBGUYgUKjbbJi51baR402b6xIEU_81J9_8evq1Go8j-r3YCLbbBm37PPRyc-94hr9HYBehHgUuhnZ_Mi8QwQyt9L3q8IPqAT2V5ZrwOwjYRyi_WX11fvdYbuv7TVaAwhm8JZO0Wc0uuQXt0QI_i6JZaF2KYQsgD0Xp_bM1V_h4Un4y2uCy5ffeJZvAvOj_QQc7CsULssOXuUsc1lt0IAVUNQS6a0VUrIaOAdCfiWlrFWEIvSdLnombRoum02T-m1LhU3Uu1O0KrMASe9eyJamFyXCr0_Btaz0A5zzmI7Z80QHVUV8ozZFEbo3GnAVY_fp1hXGdVs6_wwAXRH38PAsA3nrzD829y0tTOt95vXYX7Dbw_vSEPTCUS0LDvXvWK2ZpQCB_Ar0OntNvl0kKerkX68q9UOrIpOqgaTPQ7RU3ygEZA8JIDIku6M-DnNZQ2ZTP-RAig7ongW__ncrrdGtT1OjSCLK3sHnAxzDJI9LcDIVO4J5VX1D2SS-55nt6MrAnyCCi5jqp_o5fM8vdwpBfkTAQXcb0l8sj0IFhzkj4IB3achSkFVCEH5A0plJvIXwzicf_A3khoWqkzBMvXFf_YvbHXDevlfeXK1MkfLWxScoEUNssj5HC8c8FuQddgJPYeOd03uejheQl31YpvG4gWeoHRGUE_H3IT5YzL5iVpjEuleGGWfhF7G22Gopi055LMe108wKNgufOvk6dEjm-euVXYpVFRkCWjCTtINRaPTFGUhazV23UFAaeNrsfeX414VLYfIGmDU1HoAZiW5ST_mi5d97FuBWkniRYBmD9f-rVLzc5Iuit7Jq1fEt5N3MPiSItube-jTnqQipdnsVrbWj_YzSWxqvKzJj9vuO6VwLvqd2PPNob0FfWfKqlvc7gYS766eP66XLoWL-uBSdIxAXojsXrICnPJNeHH_bCbQGAJVgoal61Be8w0CqtPgeIVNitlq1zvk6XkwQOQOlfkzuHUolOBXFy03hNGClIfwaujv88rL6zsKKiF0g8CZQdqrtrzNAqs71pFaKxg"; // Replace with your generated access token
+			const folderPath = "/ExperimentTest1"; // Replace with the path to your folder in Dropbox
+			const dropboxListUrl = "https://api.dropboxapi.com/2/files/list_folder";
+			const dropboxDownloadBaseUrl = "https://content.dropboxapi.com/2/files/download";
+
+			const videoFiles = [];
+			const audioFiles = [];
+
+			try {
+				// Step 1: List all files in the folder
+				const listResponse = await fetch(dropboxListUrl, {
+					method: "POST",
+					headers: {
+						"Authorization": `Bearer ${accessToken}`,
+						"Content-Type": "application/json",
+					},
+					body: JSON.stringify({
+						path: folderPath,
+					}),
+				});
+
+				const listData = await listResponse.json();
+
+				// Step 2: Separate video and audio files
+				listData.entries.forEach((file) => {
+					if (file.name.endsWith(".mp4")) {
+						videoFiles.push(`${dropboxDownloadBaseUrl}?path=${encodeURIComponent(file.path_lower)}`);
+					} else if (file.name.endsWith(".wav")) {
+						audioFiles.push(`${dropboxDownloadBaseUrl}?path=${encodeURIComponent(file.path_lower)}`);
+					}
+				});
+
+				document.getElementById("file-status").innerText = `Videos loaded: ${videoFiles.length}, Audio files loaded: ${audioFiles.length}`;
+
+				if (videoFiles.length === 194 && audioFiles.length === 194) {
+					document.getElementById("start-button").disabled = false;
+				} else {
+					document.getElementById("file-status").innerText += "\nPlease ensure exactly 194 video and audio files are available.";
+				}
+			} catch (error) {
+				console.error("Error loading files from Dropbox:", error);
+				document.getElementById("file-status").innerText = "Error loading files. Please check your Dropbox setup.";
+			}
+		}
+
+        function updateUploadStatus() {
+            const statusDiv = document.getElementById('upload-status');
+            const startButton = document.getElementById('start-button');
+            
+            statusDiv.innerHTML = `
+                Videos loaded: ${videoFiles.length}<br>
+                Audio files loaded: ${audioFiles.length}
+            `;
+
+            startButton.disabled = !(videoFiles.length === 194 && audioFiles.length === 194);
+            
+            if (videoFiles.length !== 194 || audioFiles.length !== 194) {
+                statusDiv.innerHTML += '<br><span style="color: red;">Please upload exactly 194 video files and 194 audio files.</span>';
+            }
+        }
+
+        function validateAndStart() {
+            participantId = document.getElementById('participantId').value;
+            participantAge = document.getElementById('participantAge').value;
+            
+            if (!participantId || !participantAge) {
+                alert('Please enter both Participant ID and Age');
+                return;
+            }
+            
+            if (!videoFiles.length || !audioFiles.length || videoFiles.length !== 194 || audioFiles.length !== 194) {
+				alert('Please ensure the server has exactly 194 video and audio files.');
+				return;
+			}
+            
+            document.getElementById('participant-info').style.display = 'none';
+            document.getElementById('experiment-container').style.display = 'block';
+            
+            startTBWPractice();
+        }
+		
+		function startTBWPractice() {
+			currentPhase = 'practice';
+			practiceSuccessCount = 0;
+			document.getElementById('practice-label').style.display = 'block';
+			showTBWInstructions();
+		}
+		
+		function showTBWInstructions() {
+			document.getElementById('instructions').style.display = 'block';
+			document.getElementById('response-options').style.display = 'none';
+			document.getElementById('instructions').innerHTML = `
+				<h2>Audio-Visual Binding Identification</h2>
+				<p>You will see a white square and hear a sound.</p>
+				<p>After each presentation, indicate whether the visual and auditory stimuli appeared at the same time or different times.</p>
+				<button onclick="startTrial()">Start Trial</button>
+			`;
+		}
+		
+		function startTrial() {
+			document.getElementById('instructions').style.display = 'none';
+			document.getElementById('response-options').style.display = 'none';
+			
+			// Add a 1-second delay before presenting stimuli (half of the 2-second buffer)
+			setTimeout(() => presentStimuli(), 1000);
+		}
+
+		function presentStimuli() {
+			const stimulus = document.getElementById('stimulus');
+			const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+			
+			// Create white noise
+			const bufferSize = audioContext.sampleRate * 0.03; // 30ms
+			const buffer = audioContext.createBuffer(1, bufferSize, audioContext.sampleRate);
+			const data = buffer.getChannelData(0);
+			
+			for (let i = 0; i < bufferSize; i++) {
+				data[i] = Math.random() * 2 - 1;
+			}
+			
+			const source = audioContext.createBufferSource();
+			source.buffer = buffer;
+			
+			// Apply volume (12dB)
+			const gainNode = audioContext.createGain();
+			gainNode.gain.value = Math.pow(10, WhiteNoiseVolume/20); // Changed from hardcoded 12
+			source.connect(gainNode);
+			gainNode.connect(audioContext.destination);
+			
+			// During practice, always use 0ms asynchrony
+			let asynchrony = currentPhase === 'practice' ? 0 : tbwTrials[currentTrialNumber];
+			asynchrony += BaseAVDelay;
+			
+			trialStartTime = performance.now();
+			
+			if (asynchrony >= 0) {
+				// Visual first, then audio
+				stimulus.style.display = 'block';
+				setTimeout(() => {
+					stimulus.style.display = 'none';
+					setTimeout(() => source.start(), asynchrony - 30); // Subtract visual duration
+				}, 30);
+			} else {
+				// Audio first, then visual
+				source.start();
+				setTimeout(() => {
+					stimulus.style.display = 'block';
+					setTimeout(() => stimulus.style.display = 'none', 30);
+				}, -asynchrony);
+			}
+			
+			// Show response options after remaining buffer time
+			setTimeout(showResponseOptions, 1000);
+		}
+		
+		function showResponseOptions() {
+			document.getElementById('response-options').innerHTML = `
+				<button onclick="recordResponse('same')">Same Time</button>
+				<button onclick="recordResponse('different')">Different Times</button>
+			`;
+			document.getElementById('response-options').style.display = 'block';
+		}
+		
+		function recordResponse(response) {
+			const responseTime = performance.now() - trialStartTime;
+			
+			if (currentPhase === 'practice') {
+				if (response === 'same') {
+					practiceSuccessCount++;
+					if (practiceSuccessCount >= 3) {
+						// Transition to actual trials after 3 correct responses in a row
+						currentPhase = 'tbw';
+						document.getElementById('practice-label').style.display = 'none';
+						
+						// Initialize trial order: 5 trials for each asynchrony, randomized
+						tbwTrials = tbwAsynchronies.flatMap(async => Array(5).fill(async))
+							.sort(() => Math.random() - 0.5);
+						currentTrialNumber = 0;
+					}
+				} else {
+					// Reset counter if they answer "different"
+					practiceSuccessCount = 0;
+				}
+			} else if (currentPhase === 'tbw') {
+				// Record trial results
+				tbwResults.push({
+					participantId,
+					participantAge,
+					timestamp: new Date().toISOString(),
+					queryNumber: currentTrialNumber + 1,
+					asynchrony: tbwTrials[currentTrialNumber],
+					response,
+					responseTime
+				});
+				
+				currentTrialNumber++;
+				
+				// Check if all trials are complete
+				if (currentTrialNumber >= tbwTrials.length) {
+					startEmotionSection();
+					return;
+				}
+			}
+			
+			// Show instructions for next trial
+			showTBWInstructions();
+		}
+		
+		// Add this new function after recordResponse function
+		function startEmotionSection() {
+			currentPhase = 'emotion';
+			currentTrialNumber = 0;
+			
+			// Generate random trial order
+			emotionTrialOrder = Array.from({length: 194}, (_, i) => i + 1);
+			emotionTrialOrder.sort(() => Math.random() - 0.5);
+			
+			// Generate delays
+			emotionTrialDelays = [];
+			const totalSteps = Math.floor((maximumAsynchrony - minimumAsynchrony) / asynchronySteps) + 1;
+			let currentDelay = minimumAsynchrony;
+			
+			// Fill forward
+			while (currentDelay <= maximumAsynchrony) {
+				emotionTrialDelays.push(currentDelay);
+				currentDelay += asynchronySteps;
+			}
+			
+			// Fill backward to complete the distribution
+			currentDelay = maximumAsynchrony - asynchronySteps;
+			while (currentDelay > minimumAsynchrony) {
+				emotionTrialDelays.push(currentDelay);
+				currentDelay -= asynchronySteps;
+			}
+			
+			// Repeat the pattern until we have 194 delays
+			while (emotionTrialDelays.length < 194) {
+				emotionTrialDelays.push(...emotionTrialDelays.slice(0, 194 - emotionTrialDelays.length));
+			}
+			
+			// Randomize delays
+			emotionTrialDelays.sort(() => Math.random() - 0.5);
+			
+			// Show initial emotion section instructions
+			document.getElementById('instructions').innerHTML = `
+				<h2>Section 2: Emotional Identification</h2>
+				<p>You will see a series of audio-visual stimuli. Please identify the emotion shown in each one.</p>
+				<button onclick="startFirstEmotionTrial()">Start</button>
+			`;
+			document.getElementById('instructions').style.display = 'block';
+			document.getElementById('response-options').style.display = 'none';
+		}
+		
+		function startFirstEmotionTrial() {
+			// Hide instructions permanently after first start
+			document.getElementById('instructions').style.display = 'none';
+			startEmotionTrial();
+		}
+		
+        // [Previous functions remain unchanged until startEmotionTrial]
+
+        async function startEmotionTrial() {
+			// Hide all UI elements except video
+			document.getElementById('instructions').style.display = 'none';
+			document.getElementById('response-options').style.display = 'none';
+			document.getElementById('practice-label').style.display = 'none';
+			
+			const currentFileIndex = emotionTrialOrder[currentTrialNumber];
+			const currentDelay = emotionTrialDelays[currentTrialNumber];
+			
+			const videoElement = document.getElementById('emotion-video');
+			const audioElement = document.getElementById('emotion-audio');
+			
+			try {
+				// Create object URLs for the current video and audio files
+				const videoURL = videoFiles[currentFileIndex - 1];
+				const audioURL = audioFiles[currentFileIndex - 1];
+				
+				// Set up video and audio elements
+				videoElement.src = videoURL;
+				audioElement.src = audioURL;
+				
+				// Set audio volume to variable
+				audioElement.volume = EmotionAudioVolume;
+				
+				// Reset elements
+				videoElement.currentTime = 0;
+				audioElement.currentTime = 0;
+				
+				// Show video element
+				videoElement.style.display = 'block';
+				
+				// Implement delay logic
+				if (currentDelay >= 0) {
+					// Video first, then audio
+					videoElement.play();
+					setTimeout(() => audioElement.play(), currentDelay);
+				} else {
+					// Audio first, then video
+					audioElement.play();
+					setTimeout(() => videoElement.play(), -currentDelay);
+				}
+				
+				// Wait for video to end before showing response options
+				videoElement.onended = () => {
+					videoElement.style.display = 'none';
+					// Revoke object URLs to free memory
+					URL.revokeObjectURL(videoURL);
+					URL.revokeObjectURL(audioURL);
+					showEmotionOptions();
+				};
+				
+			} catch (error) {
+				console.error('Playback error:', error);
+				alert(`Error playing files for trial ${currentFileIndex}`);
+				videoElement.style.display = 'none';
+				showEmotionOptions();
+			}
+		}
+		
+		function showEmotionOptions() {
+			const emotionOptions = Object.values(emotions);
+			const shuffledEmotions = emotionOptions.sort(() => Math.random() - 0.5);
+			
+			document.getElementById('response-options').innerHTML = `
+				<div class="emotion-buttons">
+					${shuffledEmotions.map(emotion => 
+						`<button onclick="recordEmotionResponse('${emotion[0]}')">${emotion}</button>`
+					).join('')}
+				</div>
+			`;
+			document.getElementById('response-options').style.display = 'block';
+		}
+		
+		// Add this function after showEmotionOptions
+		function recordEmotionResponse(response) {
+			const currentFile = videoFiles[emotionTrialOrder[currentTrialNumber] - 1].name;
+			
+			emotionResults.push({
+				participantId,
+				participantAge,
+				timestamp: new Date().toISOString(),
+				questionNumber: currentTrialNumber + 1,
+				stimulantName: emotionTrialOrder[currentTrialNumber],
+				fileName: currentFile,  // Added video filename
+				delay: emotionTrialDelays[currentTrialNumber],
+				response
+			});
+			
+			currentTrialNumber++;
+			
+			if (currentTrialNumber >= 194) {
+				showFinalScreen();
+			} else {
+				startEmotionTrial();
+			}
+		}
+
+        // [Rest of the functions remain unchanged]
+		
+        // Modified recordEmotionResponse function
+        function recordEmotionResponse(response) {
+			emotionResults.push({
+                participantId,
+                participantAge,
+                timestamp: new Date().toISOString(),
+                questionNumber: currentTrialNumber + 1,
+                fileName: emotionTrialOrder[currentTrialNumber],
+                delay: emotionTrialDelays[currentTrialNumber],
+                response
+            });
+            
+            currentTrialNumber++;
+            
+            if (currentTrialNumber >= 194) {
+                document.getElementById('response-options').style.display = 'none';
+                showFinalScreen();
+            } else {
+                startEmotionTrial();
+            }
+        }
+		
+		// Add this function to show the final screen
+		function showFinalScreen() {
+			document.getElementById('instructions').innerHTML = `
+				<h2>Thank You!</h2>
+				<p>Your participant identifier is: <strong>${participantId}</strong></p>
+				<p>Please write down your participant identifier. You may email everettrobins@outlook.com within 14 days with your participant identifier to withdraw your data.</p>
+				<p>Please speak with Everett or Mr. Mackrory outside the room to confirm that you are complete.</p>
+			`;
+			document.getElementById('instructions').style.display = 'block';
+			document.getElementById('response-options').style.display = 'none';
+			currentPhase = 'complete';
+		}
+
+        // Modified downloadAllResults function to include new fields
+        function downloadAllResults() {
+            // TBW results remain unchanged
+                        // Create and download TBW results
+            const tbwCsv = tbwResults.map(row => 
+                `${row.participantId},${row.participantAge},${row.timestamp},${row.queryNumber},${row.asynchrony},${row.response},${row.responseTime}`
+            ).join('\n');
+            
+            const tbwBlob = new Blob([tbwCsv], { type: 'text/csv' });
+            const tbwLink = document.createElement('a');
+            tbwLink.href = URL.createObjectURL(tbwBlob);
+            tbwLink.download = `TBWresults${participantId}.csv`;
+            tbwLink.click();
+
+            // Modified emotion results format
+				const emoCsv = emotionResults.map(row =>
+					`${row.participantId},${row.participantAge},${row.timestamp},${row.questionNumber},` +
+					`${row.stimulantName},${row.fileName},${row.delay},${row.response}`
+				).join('\n');
+			            
+            const emoBlob = new Blob([emoCsv], { type: 'text/csv' });
+            const emoLink = document.createElement('a');
+            emoLink.href = URL.createObjectURL(emoBlob);
+            emoLink.download = `EmoResults${participantId}.csv`;
+            emoLink.click();
+			
+        }
+
+        // Close admin screen
+        function closeAdminScreen() {
+            document.getElementById('admin-screen').style.display = 'none';
+        }
+
+        // Start the experiment
+        window.onload = async function () {
+			init();
+			await loadFilesFromDropbox();
+		};
+    </script>
+</body>
+</html>
