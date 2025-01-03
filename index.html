@@ -84,11 +84,12 @@
         }
 
         .file-upload-section {
-            margin: 20px 0;
-            padding: 20px;
-            border: 1px solid #ccc;
-            border-radius: 5px;
-        }
+			margin: 20px 0;
+			padding: 20px;
+			border: 1px solid #ccc;
+			border-radius: 5px;
+			display: block; /* Add this line */
+		}
 
         #upload-status {
             margin: 10px 0;
@@ -131,7 +132,23 @@
 
         // Variables for file handling
         let videoFiles = [];
-        let audioFiles = [];
+		let audioFiles = [];
+
+		async function loadMediaFiles() {
+			try {
+				const response = await fetch('./media.json');
+				const data = await response.json();
+
+				videoFiles = data.videos;
+				audioFiles = data.audios;
+
+				updateUploadStatus(); // Optional: Update UI to show file counts
+			} catch (error) {
+				console.error('Failed to load media files:', error);
+				alert('Error: Unable to load media files.');
+			}
+		}
+
 
         // Variables for emotion trials
         let emotionTrialOrder = [];
@@ -148,40 +165,39 @@
         let currentTrialNumber = 0;
         let trialStartTime = 0;
 
-        function init() {
-            document.body.innerHTML = `
-                <div id="participant-info" class="container">
-                    <h1>Participant Information</h1>
-                    <div>
-                        <input type="number" id="participantId" placeholder="Participant ID Number">
-                        <input type="number" id="participantAge" placeholder="Age">
-                        <p>Loading video and audio files from the server...</p>
-						<div id="file-status" style="color: yellow;"></div>
-                        <button onclick="validateAndStart()" id="start-button" disabled>Continue</button>
-                    </div>
-                </div>
-                <div id="experiment-container" class="container">
-                    <div id="practice-label" class="practice-label">Practice</div>
-                    <div id="stimulus" class="stimulus"></div>
-                    <div id="instructions" class="container"></div>
-                    <div id="response-options" class="response-options"></div>
-                    <video id="emotion-video" style="display: none;"></video>
-                    <audio id="emotion-audio" style="display: none;"></audio>
-                </div>
-                <div id="admin-screen" class="container">
-                    <h2>Administrator Download Screen</h2>
-                    <button onclick="downloadAllResults()">Download Results</button>
-                    <button onclick="closeAdminScreen()">Close</button>
-                </div>
-            `;
+		function init() {
+			loadMediaFiles(); // Dynamically load media files
 
-            document.addEventListener('keydown', function(event) {
-                if (event.key === 'Enter' && currentPhase === 'complete') {
-                    document.getElementById('admin-screen').style.display = 'block';
-                }
-            });
+			document.body.innerHTML = `
+				<div id="participant-info" class="container">
+					<h1>Participant Information</h1>
+					<input type="number" id="participantId" placeholder="Participant ID Number">
+					<input type="number" id="participantAge" placeholder="Age">
+					<div id="upload-status">Loading media files...</div>
+					<button onclick="validateAndStart()" id="start-button" disabled>Continue</button>
+				</div>
+				<div id="experiment-container" class="container">
+					<div id="practice-label" class="practice-label">Practice</div>
+					<div id="stimulus" class="stimulus"></div>
+					<div id="instructions" class="container"></div>
+					<div id="response-options" class="response-options"></div>
+					<video id="emotion-video" style="display: none;"></video>
+					<audio id="emotion-audio" style="display: none;"></audio>
+				</div>
+				<div id="admin-screen" class="container">
+					<h2>Administrator Download Screen</h2>
+					<button onclick="downloadAllResults()">Download Results</button>
+					<button onclick="closeAdminScreen()">Close</button>
+				</div>
+			`;
+
+			document.addEventListener('keydown', function(event) {
+				if (event.key === 'Enter' && currentPhase === 'complete') {
+					document.getElementById('admin-screen').style.display = 'block';
+				}
+			});
 			addKeyboardListeners();
-        }
+		}
 		
 		// 4. Add the keyboard shortcut handler after the init function
 		function addKeyboardListeners() {
@@ -208,42 +224,40 @@
 			});
 		}
 
-        async function loadFilesFromGitHub() {
-			const repoURL = "https://raw.githubusercontent.com/QU3RTY/temporalsynchrony/main/";
-			const videoFiles = [];
-			const audioFiles = [];
-			
-			// Define expected filenames (replace these arrays with actual file names if known)
-			for (let i = 1; i <= 194; i++) {
-				videoFiles.push(`${repoURL}${i}.mp4`);
-				audioFiles.push(`${repoURL}${i}.wav`);
-			}
-			
-			// Simulate loading files
-			document.getElementById("file-status").innerText = `Videos loaded: ${videoFiles.length}, Audio files loaded: ${audioFiles.length}`;
+		function updateUploadStatus() {
+			const statusDiv = document.getElementById('upload-status');
+			const startButton = document.getElementById('start-button');
 
-			if (videoFiles.length === 194 && audioFiles.length === 194) {
-				document.getElementById("start-button").disabled = false;
+			if (videoFiles.length > 0 && audioFiles.length > 0) {
+				statusDiv.innerHTML = `
+					Videos loaded: ${videoFiles.length}<br>
+					Audio files loaded: ${audioFiles.length}
+				`;
+				startButton.disabled = false;
 			} else {
-				document.getElementById("file-status").innerText += "\nPlease ensure exactly 194 video and audio files are available.";
+				statusDiv.innerHTML = 'Media files are not yet loaded.';
+				startButton.disabled = true;
 			}
 		}
 
         function updateUploadStatus() {
-            const statusDiv = document.getElementById('upload-status');
-            const startButton = document.getElementById('start-button');
-            
-            statusDiv.innerHTML = `
-                Videos loaded: ${videoFiles.length}<br>
-                Audio files loaded: ${audioFiles.length}
-            `;
-
-            startButton.disabled = !(videoFiles.length === 194 && audioFiles.length === 194);
-            
-            if (videoFiles.length !== 194 || audioFiles.length !== 194) {
-                statusDiv.innerHTML += '<br><span style="color: red;">Please upload exactly 194 video files and 194 audio files.</span>';
-            }
-        }
+			const statusDiv = document.getElementById('upload-status');
+			const startButton = document.getElementById('start-button');
+			const fileUploadSection = document.querySelector('.file-upload-section');
+			
+			if (videoFiles.length === 194 && audioFiles.length === 194) {
+				statusDiv.style.display = 'none';
+				fileUploadSection.style.display = 'none';
+				startButton.disabled = false;
+			} else {
+				statusDiv.innerHTML = `
+					Videos loaded: ${videoFiles.length}<br>
+					Audio files loaded: ${audioFiles.length}<br>
+					<span style="color: red;">Please upload exactly 194 video files and 194 audio files.</span>
+				`;
+				startButton.disabled = true;
+			}
+		}
 
         function validateAndStart() {
             participantId = document.getElementById('participantId').value;
@@ -254,8 +268,8 @@
                 return;
             }
             
-            if (!videoFiles.length || !audioFiles.length || videoFiles.length !== 194 || audioFiles.length !== 194) {
-				alert('Please ensure the server has exactly 194 video and audio files.');
+            if (videoFiles.length !== 194 || audioFiles.length !== 194) {
+				alert('Error: The media files do not meet the required count of 194 each.');
 				return;
 			}
             
@@ -459,8 +473,8 @@
 			
 			try {
 				// Create object URLs for the current video and audio files
-				const videoURL = videoFiles[currentFileIndex - 1];
-				const audioURL = audioFiles[currentFileIndex - 1];
+				const videoURL = `./${videoFiles[currentFileIndex - 1].name}`;
+				const audioURL = `./${audioFiles[currentFileIndex - 1].name}`;
 				
 				// Set up video and audio elements
 				videoElement.src = videoURL;
@@ -613,10 +627,7 @@
         }
 
         // Start the experiment
-        window.onload = async function () {
-			init();
-			await loadFilesFromGitHub();
-		};
+        window.onload = init;
     </script>
 </body>
 </html>
